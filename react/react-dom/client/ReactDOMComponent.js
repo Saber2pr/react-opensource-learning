@@ -115,151 +115,6 @@ let canDiffStyleForHydrationWarning
 let normalizeMarkupForTextOrAttribute
 let normalizeHTML
 
-if (__DEV__) {
-  warnedUnknownTags = {
-    // Chrome is the only major browser not shipping <time>. But as of July
-    // 2017 it intends to ship it due to widespread usage. We intentionally
-    // *don't* warn for <time> even if it's unrecognized by Chrome because
-    // it soon will be, and many apps have been using it anyway.
-    time: true,
-    // There are working polyfills for <dialog>. Let people use it.
-    dialog: true,
-    // Electron ships a custom <webview> tag to display external web content in
-    // an isolated frame and process.
-    // This tag is not present in non Electron environments such as JSDom which
-    // is often used for testing purposes.
-    // @see https://electronjs.org/docs/api/webview-tag
-    webview: true
-  }
-
-  validatePropertiesInDevelopment = function(type, props) {
-    validateARIAProperties(type, props)
-    validateInputProperties(type, props)
-    validateUnknownProperties(type, props, /* canUseEventSystem */ true)
-  }
-
-  // IE 11 parses & normalizes the style attribute as opposed to other
-  // browsers. It adds spaces and sorts the properties in some
-  // non-alphabetical order. Handling that would require sorting CSS
-  // properties in the client & server versions or applying
-  // `expectedStyle` to a temporary DOM node to read its `style` attribute
-  // normalized. Since it only affects IE, we're skipping style warnings
-  // in that browser completely in favor of doing all that work.
-  // See https://github.com/facebook/react/issues/11807
-  canDiffStyleForHydrationWarning = canUseDOM && !document.documentMode
-
-  // HTML parsing normalizes CR and CRLF to LF.
-  // It also can turn \u0000 into \uFFFD inside attributes.
-  // https://www.w3.org/TR/html5/single-page.html#preprocessing-the-input-stream
-  // If we have a mismatch, it might be caused by that.
-  // We will still patch up in this case but not fire the warning.
-  const NORMALIZE_NEWLINES_REGEX = /\r\n?/g
-  const NORMALIZE_NULL_AND_REPLACEMENT_REGEX = /\u0000|\uFFFD/g
-
-  normalizeMarkupForTextOrAttribute = function(markup: mixed): string {
-    const markupString =
-      typeof markup === "string" ? markup : "" + (markup: any)
-    return markupString
-      .replace(NORMALIZE_NEWLINES_REGEX, "\n")
-      .replace(NORMALIZE_NULL_AND_REPLACEMENT_REGEX, "")
-  }
-
-  warnForTextDifference = function(
-    serverText: string,
-    clientText: string | number
-  ) {
-    if (didWarnInvalidHydration) {
-      return
-    }
-    const normalizedClientText = normalizeMarkupForTextOrAttribute(clientText)
-    const normalizedServerText = normalizeMarkupForTextOrAttribute(serverText)
-    if (normalizedServerText === normalizedClientText) {
-      return
-    }
-    didWarnInvalidHydration = true
-    warningWithoutStack(
-      false,
-      'Text content did not match. Server: "%s" Client: "%s"',
-      normalizedServerText,
-      normalizedClientText
-    )
-  }
-
-  warnForPropDifference = function(
-    propName: string,
-    serverValue: mixed,
-    clientValue: mixed
-  ) {
-    if (didWarnInvalidHydration) {
-      return
-    }
-    const normalizedClientValue = normalizeMarkupForTextOrAttribute(clientValue)
-    const normalizedServerValue = normalizeMarkupForTextOrAttribute(serverValue)
-    if (normalizedServerValue === normalizedClientValue) {
-      return
-    }
-    didWarnInvalidHydration = true
-    warningWithoutStack(
-      false,
-      "Prop `%s` did not match. Server: %s Client: %s",
-      propName,
-      JSON.stringify(normalizedServerValue),
-      JSON.stringify(normalizedClientValue)
-    )
-  }
-
-  warnForExtraAttributes = function(attributeNames: Set<string>) {
-    if (didWarnInvalidHydration) {
-      return
-    }
-    didWarnInvalidHydration = true
-    const names = []
-    attributeNames.forEach(function(name) {
-      names.push(name)
-    })
-    warningWithoutStack(false, "Extra attributes from the server: %s", names)
-  }
-
-  warnForInvalidEventListener = function(registrationName, listener) {
-    if (listener === false) {
-      warning(
-        false,
-        "Expected `%s` listener to be a function, instead got `false`.\n\n" +
-          "If you used to conditionally omit it with %s={condition && value}, " +
-          "pass %s={condition ? value : undefined} instead.",
-        registrationName,
-        registrationName,
-        registrationName
-      )
-    } else {
-      warning(
-        false,
-        "Expected `%s` listener to be a function, instead got a value of `%s` type.",
-        registrationName,
-        typeof listener
-      )
-    }
-  }
-
-  // Parse the HTML and read it back to normalize the HTML string so that it
-  // can be used for comparison.
-  normalizeHTML = function(parent: Element, html: string) {
-    // We could have created a separate document here to avoid
-    // re-initializing custom elements if they exist. But this breaks
-    // how <noscript> is being handled. So we use the same document.
-    // See the discussion in https://github.com/facebook/react/pull/11157.
-    const testElement =
-      parent.namespaceURI === HTML_NAMESPACE
-        ? parent.ownerDocument.createElement(parent.tagName)
-        : parent.ownerDocument.createElementNS(
-            (parent.namespaceURI: any),
-            parent.tagName
-          )
-    testElement.innerHTML = html
-    return testElement.innerHTML
-  }
-}
-
 function ensureListeningTo(
   rootContainerElement: Element | Node,
   registrationName: string
@@ -309,13 +164,6 @@ function setInitialDOMProperties(
     }
     const nextProp = nextProps[propKey]
     if (propKey === STYLE) {
-      if (__DEV__) {
-        if (nextProp) {
-          // Freeze the next style object so that we can assume it won't be
-          // mutated. We have already warned for this in the past.
-          Object.freeze(nextProp)
-        }
-      }
       // Relies on `updateStylesByID` not mutating `styleUpdates`.
       setValueForStyles(domElement, nextProp)
     } else if (propKey === DANGEROUSLY_SET_INNER_HTML) {
@@ -349,9 +197,6 @@ function setInitialDOMProperties(
       // on server rendering (but we *do* want to emit it in SSR).
     } else if (registrationNameModules.hasOwnProperty(propKey)) {
       if (nextProp != null) {
-        if (__DEV__ && typeof nextProp !== "function") {
-          warnForInvalidEventListener(propKey, nextProp)
-        }
         ensureListeningTo(rootContainerElement, propKey)
       }
     } else if (nextProp != null) {
