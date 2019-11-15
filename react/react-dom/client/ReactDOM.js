@@ -39,7 +39,7 @@ import {
   findHostInstanceWithWarning,
   flushPassiveEffects,
   IsThisRendererActing
-} from "react-reconciler/inline.dom"
+} from "../../react-reconciler/ReactFiberReconciler"
 import { createPortal as createPortalImpl } from "shared/ReactPortal"
 import { canUseDOM } from "shared/ExecutionEnvironment"
 import { setBatchingImplementation } from "legacy-events/ReactGenericBatching"
@@ -421,12 +421,9 @@ function legacyRenderSubtreeIntoContainer(
   forceHydrate: boolean,
   callback: ?Function
 ) {
-  // TODO: Without `any` type, Flow says "Property cannot be accessed on any
-  // member of intersection type." Whyyyyyy.
-  let root: _ReactSyncRoot = (container._reactRootContainer: any)
+  let root: _ReactSyncRoot = container._reactRootContainer
   let fiberRoot
   if (!root) {
-    // Initial mount
     root = container._reactRootContainer = legacyCreateRootFromDOMContainer(
       container,
       forceHydrate
@@ -440,9 +437,9 @@ function legacyRenderSubtreeIntoContainer(
       }
     }
     // Initial mount should not be batched.
-    unbatchedUpdates(() => {
+    unbatchedUpdates(() =>
       updateContainer(children, fiberRoot, parentComponent, callback)
-    })
+    )
   } else {
     fiberRoot = root._internalRoot
     if (typeof callback === "function") {
@@ -452,7 +449,6 @@ function legacyRenderSubtreeIntoContainer(
         originalCallback.call(instance)
       }
     }
-    // Update
     updateContainer(children, fiberRoot, parentComponent, callback)
   }
   return getPublicRootInstance(fiberRoot)
