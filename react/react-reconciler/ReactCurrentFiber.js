@@ -19,7 +19,7 @@ import {
   ContextConsumer,
 } from 'shared/ReactWorkTags';
 import describeComponentFrame from 'shared/describeComponentFrame';
-import getComponentName from 'shared/getComponentName';
+import getComponentName from '../shared/getComponentName';
 
 const ReactDebugCurrentFrame = ReactSharedInternals.ReactDebugCurrentFrame;
 
@@ -45,7 +45,7 @@ function describeFiber(fiber: Fiber): string {
       return describeComponentFrame(name, source, ownerName);
   }
 }
-
+// 打印fiber向上的链路
 export function getStackByFiberInDevAndProd(workInProgress: Fiber): string {
   let info = '';
   let node = workInProgress;
